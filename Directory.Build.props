@@ -1,0 +1,31 @@
+<Project>
+  <PropertyGroup>
+    <AnalysisMode>All</AnalysisMode>
+    <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
+    <DebugType>portable</DebugType>
+    <DefaultClassLibFrameworks>net11.0</DefaultClassLibFrameworks>
+    <Deterministic>true</Deterministic>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <Nullable>enable</Nullable>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <UseArtifactsOutput>true</UseArtifactsOutput>
+    <NoWarn>$(NoWarn);CA1515</NoWarn>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <WarningsNotAsErrors>$(WarningsNotAsErrors);NU5104</WarningsNotAsErrors>
+  </PropertyGroup>
+  
+  <PropertyGroup Label="Package Items">
+    <Authors>Hugo Woodiwiss</Authors>
+    <Copyright>Copyright (c) Hugo Woodiwiss 2023-$([System.DateTime]::Now.ToString(yyyy))</Copyright>
+    <Description>A Command Line Tool to enable one-touch migration to commit-hash references for GitHub Actions workflows.</Description>
+    <EnablePackageValidation>true</EnablePackageValidation>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <PackageLicenseFile>LICENSE</PackageLicenseFile>
+    <PackageProjectUrl>https://github.com/hwoodiwiss/HwoodiwissApplication</PackageProjectUrl>
+    <PackageReleaseNotes>$(PackageProjectUrl)/releases</PackageReleaseNotes>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <RepositoryType>git</RepositoryType>
+  </PropertyGroup>
+</Project>

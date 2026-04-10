@@ -1,0 +1,5 @@
+<Project>
+  <ItemGroup>
+    <PackageVersion Include="TUnit" Version="1.30.8" />
+  </ItemGroup>
+</Project>

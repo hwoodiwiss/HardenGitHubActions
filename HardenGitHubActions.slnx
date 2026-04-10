@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/HardenGitHubActions.Core/HardenGitHubActions.Core.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/HardenGitHubActions.Tests/HardenGitHubActions.Tests.csproj" />
+  </Folder>
+</Solution>
