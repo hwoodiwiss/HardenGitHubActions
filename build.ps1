@@ -17,6 +17,7 @@ $testProjectPaths = @(
 
 $packageProjectPaths = @(
     "src/HardenGitHubActions.Core/HardenGitHubActions.Core.csproj"
+    "src/HardenGitHubActions.Cli/HardenGitHubActions.Cli.csproj"
 )
 
 

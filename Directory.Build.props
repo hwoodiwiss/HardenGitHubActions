@@ -18,7 +18,7 @@
   
   <PropertyGroup Label="Package Items">
     <Authors>Hugo Woodiwiss</Authors>
-    <Copyright>Copyright (c) Hugo Woodiwiss 2023-$([System.DateTime]::Now.ToString(yyyy))</Copyright>
+    <Copyright>Copyright (c) Hugo Woodiwiss 2026-$([System.DateTime]::Now.ToString(yyyy))</Copyright>
     <Description>A Command Line Tool to enable one-touch migration to commit-hash references for GitHub Actions workflows.</Description>
     <EnablePackageValidation>true</EnablePackageValidation>
     <EmbedUntrackedSources>true</EmbedUntrackedSources>
