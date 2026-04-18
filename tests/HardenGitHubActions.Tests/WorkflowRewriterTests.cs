@@ -217,4 +217,20 @@ public sealed class WorkflowRewriterTests
             await Assert.That(result).Contains($"actions/setup-node@{sha2}");
         }
     }
+
+    // Test 12 — CRLF line endings: lines must still be matched and CRLF preserved
+    [Test]
+    public async Task RewriteAsync_CrlfLineEndings_RewrittenAndPreserved()
+    {
+        var client = new FakeGitHubApiClient();
+        const string sha1 = "aaaa000000000000000000000000000000000000";
+        client.SetupResolve("actions", "checkout", "v4", sha1);
+
+        const string content = "steps:\r\n  - uses: actions/checkout@v4\r\n";
+        var options = new HardeningOptions { CommentMode = TagCommentMode.None };
+
+        var result = await WorkflowRewriter.RewriteAsync(content, options, client);
+
+        await Assert.That(result).IsEqualTo($"steps:\r\n  - uses: actions/checkout@{sha1}\r\n");
+    }
 }

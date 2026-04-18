@@ -7,7 +7,8 @@ namespace HardenGitHubActions.Core;
 public sealed partial class WorkflowRewriter
 {
     // Matches: {leading-whitespace}{optional-dash-space}uses: {ref}{optional-comment}
-    [GeneratedRegex(@"^(?<prefix>\s*(?:-\s+)?)uses:\s+(?<uses>\S+?)(?:\s*#.*)?$", RegexOptions.CultureInvariant)]
+    // The trailing \s* tolerates a stray CR (CRLF line endings) when callers split on '\n'.
+    [GeneratedRegex(@"^(?<prefix>\s*(?:-\s+)?)uses:\s+(?<uses>\S+?)\s*(?:#.*?)?\s*$", RegexOptions.CultureInvariant)]
     private static partial Regex UsesLinePattern { get; }
 
     public static async Task<string> RewriteAsync(
@@ -44,7 +45,12 @@ public sealed partial class WorkflowRewriter
         IGitHubApiClient github,
         CancellationToken ct)
     {
-        var match = UsesLinePattern.Match(line);
+        // Preserve a trailing CR so CRLF line endings survive rewrite (callers split on '\n').
+        var hasTrailingCr = line.Length > 0 && line[^1] == '\r';
+        var lineForMatch = hasTrailingCr ? line[..^1] : line;
+        var lineEnding = hasTrailingCr ? "\r" : string.Empty;
+
+        var match = UsesLinePattern.Match(lineForMatch);
         if (!match.Success)
         {
             return line;
@@ -72,7 +78,7 @@ public sealed partial class WorkflowRewriter
             var comment = await GetCommentAsync(
                 actionRef.Owner, actionRef.Repo, actionRef.Ref, options, github, ct).ConfigureAwait(false);
 
-            return BuildLine(prefix, actionRef.Owner, actionRef.Repo, actionRef.Ref, comment);
+            return BuildLine(prefix, actionRef.Owner, actionRef.Repo, actionRef.Ref, comment) + lineEnding;
         }
 
         var sha = await github.ResolveTagToCommitShaAsync(
@@ -85,7 +91,7 @@ public sealed partial class WorkflowRewriter
             TagCommentMode.None or _ => null,
         };
 
-        return BuildLine(prefix, actionRef.Owner, actionRef.Repo, sha, tagComment);
+        return BuildLine(prefix, actionRef.Owner, actionRef.Repo, sha, tagComment) + lineEnding;
     }
 
     private static async Task<string?> GetCommentAsync(
