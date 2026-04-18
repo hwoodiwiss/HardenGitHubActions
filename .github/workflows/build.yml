@@ -15,8 +15,7 @@ jobs:
 
       - uses: actions/setup-dotnet@v5
         with:
-          dotnet-version: '11.0.x'
-          dotnet-quality: 'preview'
+          global-json-file: global.json
 
       - name: Test
         run: dotnet test --configuration Release
@@ -53,8 +52,7 @@ jobs:
 
       - uses: actions/setup-dotnet@v5
         with:
-          dotnet-version: '11.0.x'
-          dotnet-quality: 'preview'
+          global-json-file: global.json
 
       - name: Pack
         run: >
@@ -105,8 +103,7 @@ jobs:
 
       - uses: actions/setup-dotnet@v5
         with:
-          dotnet-version: '11.0.x'
-          dotnet-quality: 'preview'
+          global-json-file: global.json
 
       - name: Publish
         run: >
@@ -160,8 +157,7 @@ jobs:
     steps:
       - uses: actions/setup-dotnet@v5
         with:
-          dotnet-version: '11.0.x'
-          dotnet-quality: 'preview'
+          global-json-file: global.json
 
       - uses: actions/download-artifact@v8
         with:
