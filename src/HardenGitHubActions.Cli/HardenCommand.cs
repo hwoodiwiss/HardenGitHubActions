@@ -51,8 +51,8 @@ internal sealed class HardenCommand(IAnsiConsole console, Func<string?, LogLevel
         var logLevel = settings switch
         {
             { Verbose: true } => LogLevel.Debug,
-            { Quiet: true }   => LogLevel.Warning,
-            _                 => LogLevel.Information,
+            { Quiet: true } => LogLevel.Warning,
+            _ => LogLevel.Information,
         };
 
         var options = new HardeningOptions
