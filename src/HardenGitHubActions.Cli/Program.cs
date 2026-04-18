@@ -3,6 +3,8 @@ using HardenGitHubActions.Cli.Infrastructure;
 using HardenGitHubActions.Core;
 using HardenGitHubActions.Core.GitHub;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Spectre.Console;
 using Spectre.Console.Cli;
 using System.Reflection;
 
@@ -15,8 +17,19 @@ Console.CancelKeyPress += (_, e) =>
 
 var services = new ServiceCollection();
 
-services.AddSingleton<Func<string?, WorkflowHardener>>(
-    token => new WorkflowHardener(new GitHubApiClient(new HttpClient(), token)));
+services.AddSingleton<IAnsiConsole>(AnsiConsole.Console);
+services.AddSingleton<Func<string?, LogLevel, WorkflowHardener>>(sp =>
+    (token, level) =>
+    {
+        var console = sp.GetRequiredService<IAnsiConsole>();
+        var loggerFactory = LoggerFactory.Create(builder =>
+        {
+            builder.SetMinimumLevel(level);
+            builder.AddProvider(new SpectreLoggerProvider(console, level));
+        });
+        var logger = loggerFactory.CreateLogger<WorkflowHardener>();
+        return new WorkflowHardener(new GitHubApiClient(new HttpClient(), token), logger);
+    });
 
 var registrar = new TypeRegistrar(services);
 var app = new CommandApp<HardenCommand>(registrar);

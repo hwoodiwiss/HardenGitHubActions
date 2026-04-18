@@ -2,6 +2,7 @@ using HardenGitHubActions.Cli;
 using HardenGitHubActions.Cli.Infrastructure;
 using HardenGitHubActions.Core;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Spectre.Console.Cli.Testing;
 
 namespace HardenGitHubActions.Tests.Cli;
@@ -59,7 +60,7 @@ public sealed class HardenCommandTests : IDisposable
     public async Task Execute_TokenArg_TokenForwardedToFactory()
     {
         string? capturedToken = null;
-        var app = BuildTester(hardenerFactory: token =>
+        var app = BuildTester(hardenerFactory: (token, _) =>
         {
             capturedToken = token;
             return new WorkflowHardener(_fakeClient);
@@ -100,11 +101,87 @@ public sealed class HardenCommandTests : IDisposable
         }
     }
 
+    // Test 6 — --verbose flag is parsed into settings
+    [Test]
+    public async Task Execute_VerboseFlag_ParsedIntoSettings()
+    {
+        var app = BuildTester();
+
+        var result = await app.RunAsync(["--verbose"]);
+
+        var settings = result.Settings as HardenCommand.Settings;
+        await Assert.That(settings!.Verbose).IsTrue();
+    }
+
+    // Test 7 — --quiet flag is parsed into settings
+    [Test]
+    public async Task Execute_QuietFlag_ParsedIntoSettings()
+    {
+        var app = BuildTester();
+
+        var result = await app.RunAsync(["--quiet"]);
+
+        var settings = result.Settings as HardenCommand.Settings;
+        await Assert.That(settings!.Quiet).IsTrue();
+    }
+
+    // Test 8 — --dry-run flag is parsed and forwarded to hardener options (file not modified)
+    [Test]
+    public async Task Execute_DryRunFlag_FileNotModified()
+    {
+        _fakeClient.SetupResolve("actions", "checkout", "v4", "aabbccddaabbccddaabbccddaabbccddaabbccdd");
+        var workflowPath = Path.Combine(_root, ".github", "workflows", "ci.yml");
+        const string original = "      - uses: actions/checkout@v4";
+        await File.WriteAllTextAsync(workflowPath, original);
+
+        var app = BuildTester();
+        var result = await app.RunAsync(["--dry-run", _root]);
+
+        var actual = await File.ReadAllTextAsync(workflowPath);
+        using (Assert.Multiple())
+        {
+            await Assert.That(result.ExitCode).IsEqualTo(0);
+            await Assert.That(actual).IsEqualTo(original);
+        }
+    }
+
+    // Test 9 — log level passed to factory: --verbose → LogLevel.Debug
+    [Test]
+    public async Task Execute_VerboseFlag_PassesDebugLogLevelToFactory()
+    {
+        LogLevel? capturedLevel = null;
+        var app = BuildTester(hardenerFactory: (_, level) =>
+        {
+            capturedLevel = level;
+            return new WorkflowHardener(_fakeClient);
+        });
+
+        await app.RunAsync(["--verbose", _root]);
+
+        await Assert.That(capturedLevel).IsEqualTo(LogLevel.Debug);
+    }
+
+    // Test 10 — log level passed to factory: --quiet → LogLevel.Warning
+    [Test]
+    public async Task Execute_QuietFlag_PassesWarningLogLevelToFactory()
+    {
+        LogLevel? capturedLevel = null;
+        var app = BuildTester(hardenerFactory: (_, level) =>
+        {
+            capturedLevel = level;
+            return new WorkflowHardener(_fakeClient);
+        });
+
+        await app.RunAsync(["--quiet", _root]);
+
+        await Assert.That(capturedLevel).IsEqualTo(LogLevel.Warning);
+    }
+
     // ── helpers ──────────────────────────────────────────────────────────────
 
-    private CommandAppTester BuildTester(Func<string?, WorkflowHardener>? hardenerFactory = null)
+    private CommandAppTester BuildTester(Func<string?, LogLevel, WorkflowHardener>? hardenerFactory = null)
     {
-        hardenerFactory ??= _ => new WorkflowHardener(_fakeClient);
+        hardenerFactory ??= (_, _) => new WorkflowHardener(_fakeClient);
 
         var services = new ServiceCollection();
         services.AddSingleton(hardenerFactory);

@@ -2,10 +2,8 @@ name: Build
 
 on:
   push:
-    branches:
-      - '**'
-    tags-ignore:
-      - '**'
+    branches: ['main']
+    tags: ['v*.*.*']
   pull_request:
 
 jobs:
@@ -13,14 +11,202 @@ jobs:
     name: Test
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '11.0.x'
           dotnet-quality: 'preview'
 
       - name: Test
         run: dotnet test --configuration Release
+
+  compute-version:
+    name: Compute version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.VERSION }}
+      is_tag: ${{ steps.v.outputs.IS_TAG }}
+    steps:
+      - id: v
+        shell: bash
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+            echo "IS_TAG=true" >> "$GITHUB_OUTPUT"
+          else
+            SHORT_SHA="${GITHUB_SHA::7}"
+            echo "VERSION=0.0.0-ci.${GITHUB_RUN_NUMBER}+${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+            echo "IS_TAG=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  pack:
+    name: Pack NuGet
+    needs: [test, compute-version]
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+      attestations: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '11.0.x'
+          dotnet-quality: 'preview'
+
+      - name: Pack
+        run: >
+          dotnet pack src/HardenGitHubActions.Cli/HardenGitHubActions.Cli.csproj
+          --configuration Release
+          -p:Version=${{ needs.compute-version.outputs.version }}
+
+      - name: Generate SHA256 checksums
+        shell: bash
+        run: |
+          cd artifacts/package/release
+          sha256sum *.nupkg > SHA256SUMS
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: 'artifacts/package/release/*.nupkg'
+
+      - name: Upload package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: nuget-package
+          path: |
+            artifacts/package/release/*.nupkg
+            artifacts/package/release/SHA256SUMS
+          retention-days: ${{ needs.compute-version.outputs.is_tag == 'true' && 90 || 1 }}
+          if-no-files-found: error
+
+  publish-binaries:
+    name: Publish binary (${{ matrix.rid }})
+    needs: [test, compute-version]
+    runs-on: ${{ matrix.os }}
+    permissions:
+      id-token: write
+      contents: read
+      attestations: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { rid: win-x64,     os: windows-latest, ext: .exe }
+          - { rid: win-arm64,   os: windows-latest, ext: .exe }
+          - { rid: linux-x64,   os: ubuntu-latest,  ext: '' }
+          - { rid: linux-arm64, os: ubuntu-latest,  ext: '' }
+          - { rid: osx-arm64,   os: macos-latest,   ext: '' }
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '11.0.x'
+          dotnet-quality: 'preview'
+
+      - name: Publish
+        run: >
+          dotnet publish src/HardenGitHubActions.Cli/HardenGitHubActions.Cli.csproj
+          --configuration Release
+          --runtime ${{ matrix.rid }}
+          --self-contained
+          -p:PublishSingleFile=true
+          -p:Version=${{ needs.compute-version.outputs.version }}
+
+      - name: Stage binary
+        shell: bash
+        run: |
+          mkdir -p staging
+          mv "artifacts/publish/HardenGitHubActions.Cli/release_${{ matrix.rid }}/harden-actions${{ matrix.ext }}" \
+             "staging/harden-actions-${{ matrix.rid }}${{ matrix.ext }}"
+
+      - name: Generate SHA256 checksum
+        shell: bash
+        run: |
+          cd staging
+          if command -v sha256sum >/dev/null 2>&1; then
+            sha256sum "harden-actions-${{ matrix.rid }}${{ matrix.ext }}" > "harden-actions-${{ matrix.rid }}${{ matrix.ext }}.sha256"
+          else
+            shasum -a 256 "harden-actions-${{ matrix.rid }}${{ matrix.ext }}" > "harden-actions-${{ matrix.rid }}${{ matrix.ext }}.sha256"
+          fi
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: 'staging/harden-actions-${{ matrix.rid }}${{ matrix.ext }}'
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: binary-${{ matrix.rid }}
+          path: staging/*
+          retention-days: ${{ needs.compute-version.outputs.is_tag == 'true' && 90 || 1 }}
+          if-no-files-found: error
+
+  release-nuget:
+    name: Publish to NuGet
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [pack, publish-binaries]
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    environment:
+      name: NuGet.org
+      url: https://www.nuget.org/profiles/hwoodiwiss
+    steps:
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '11.0.x'
+          dotnet-quality: 'preview'
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: nuget-package
+          path: nuget
+
+      - name: NuGet login (Trusted Publishing)
+        uses: NuGet/login@v1
+        id: nuget-login
+        with:
+          user: ${{ secrets.NUGET_USER }}
+
+      - name: Push to NuGet
+        env:
+          API_KEY: ${{ steps.nuget-login.outputs.NUGET_API_KEY }}
+        run: >
+          dotnet nuget push nuget/*.nupkg
+          --api-key "${API_KEY}"
+          --skip-duplicate
+          --source https://api.nuget.org/v3/index.json
+
+  release-binaries:
+    name: Upload binaries to GitHub Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [pack, publish-binaries]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: binary-*
+          path: binaries
+          merge-multiple: true
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: nuget-package
+          path: nuget
+
+      - name: Upload to GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload "${{ github.ref_name }}" \
+            binaries/* \
+            nuget/SHA256SUMS \
+            --repo "${{ github.repository }}"
