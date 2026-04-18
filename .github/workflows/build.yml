@@ -159,6 +159,7 @@ jobs:
         with:
           sparse-checkout: |
             global.json
+          sparse-checkout-cone-mode: false
 
       - uses: actions/setup-dotnet@v5
         with:
