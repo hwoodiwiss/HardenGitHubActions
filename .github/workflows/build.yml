@@ -155,6 +155,11 @@ jobs:
       name: NuGet.org
       url: https://www.nuget.org/profiles/hwoodiwiss
     steps:
+      - uses: actions/checkout@v6
+        with:
+          sparse-checkout: |
+            global.json
+
       - uses: actions/setup-dotnet@v5
         with:
           global-json-file: global.json
