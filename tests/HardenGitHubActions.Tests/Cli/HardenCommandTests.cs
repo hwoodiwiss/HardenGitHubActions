@@ -179,7 +179,7 @@ public sealed class HardenCommandTests : IDisposable
 
     // ── helpers ──────────────────────────────────────────────────────────────
 
-    private CommandAppTester BuildTester(Func<string?, LogLevel, WorkflowHardener>? hardenerFactory = null)
+    private TestConsole BuildTester(Func<string?, LogLevel, WorkflowHardener>? hardenerFactory = null)
     {
         hardenerFactory ??= (_, _) => new WorkflowHardener(_fakeClient);
 

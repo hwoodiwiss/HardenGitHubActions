@@ -23,24 +23,28 @@ internal sealed class SpectreLoggerProvider(IAnsiConsole console, LogLevel minLe
             Func<TState, Exception?, string> formatter)
         {
             ArgumentNullException.ThrowIfNull(formatter);
-            if (!IsEnabled(logLevel)) return;
+            if (!IsEnabled(logLevel))
+            {
+                return;
+            }
 
             var message = Markup.Escape(formatter(state, exception));
             var (tag, colour) = logLevel switch
             {
-                LogLevel.Trace       => ("trace", "grey"),
-                LogLevel.Debug       => ("debug", "grey"),
+                LogLevel.Trace => ("trace", "grey"),
+                LogLevel.Debug => ("debug", "grey"),
                 LogLevel.Information => ("info ", "blue"),
-                LogLevel.Warning     => ("warn ", "yellow"),
-                LogLevel.Error       => ("error", "red"),
-                LogLevel.Critical    => ("crit ", "red bold"),
-                _                    => ("?    ", "white"),
+                LogLevel.Warning => ("warn ", "yellow"),
+                LogLevel.Error => ("error", "red"),
+                LogLevel.Critical => ("crit ", "red bold"),
+                _ => ("?    ", "white"),
             };
 
             console.MarkupLine($"[{colour}]{tag}[/] {message}");
             if (exception is not null)
             {
-                console.WriteException(exception);
+                console.WriteAnsi(exception.StackTrace ?? string.Empty);
+                // console.WriteException(exception);
             }
         }
     }
