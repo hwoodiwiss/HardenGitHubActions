@@ -1,9 +1,9 @@
+using System.CommandLine;
 using HardenGitHubActions.Cli;
-using HardenGitHubActions.Cli.Infrastructure;
 using HardenGitHubActions.Core;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using Spectre.Console.Cli.Testing;
+using Spectre.Console;
 
 namespace HardenGitHubActions.Tests.Cli;
 
@@ -21,174 +21,195 @@ public sealed class HardenCommandTests : IDisposable
 
     public void Dispose() => Directory.Delete(_root, recursive: true);
 
-    // Test 1 — no args → RepositoryRoot defaults to ".", CommentMode defaults to None
+    // Test 1 — no args → RepositoryRoot defaults to ".", CommentMode defaults to MostSpecificTag, Token null.
     [Test]
-    public async Task Execute_NoArgs_DefaultSettingsParsed()
+    public async Task Parse_NoArgs_DefaultSettingsParsed()
     {
-        var app = BuildTester();
+        var rootCommand = BuildRootCommand();
 
-        var result = await app.RunAsync([]);
+        var parseResult = rootCommand.Parse([]);
 
-        var settings = result.Settings as HardenCommand.Settings;
         using (Assert.Multiple())
         {
-            await Assert.That(settings).IsNotNull();
-            await Assert.That(settings!.RepositoryRoot).IsEqualTo(".");
-            await Assert.That(settings.CommentMode).IsEqualTo(TagCommentMode.None);
-            await Assert.That(settings.Token).IsNull();
+            await Assert.That(parseResult.Errors.Count).IsEqualTo(0);
+            await Assert.That(parseResult.GetRequiredValue<string>(HardenCommand.Inputs.RepositoryRoot)).IsEqualTo(".");
+            await Assert.That(parseResult.GetRequiredValue(HardenCommand.Inputs.CommentMode)).IsEqualTo(TagCommentMode.MostSpecificTag);
+            await Assert.That(parseResult.GetRequiredValue(HardenCommand.Inputs.GitHubToken)).IsNull();
         }
     }
 
-    // Test 2 — --comment-mode ExactTag is parsed into settings
+    // Test 2 — --comment-mode ExactTag is parsed.
     [Test]
-    public async Task Execute_CommentModeExactTag_ParsedIntoSettings()
+    public async Task Parse_CommentModeExactTag_Parsed()
     {
-        var app = BuildTester();
+        var rootCommand = BuildRootCommand();
 
-        var result = await app.RunAsync(["--comment-mode", "ExactTag"]);
+        var parseResult = rootCommand.Parse(["--comment-mode", "ExactTag"]);
 
-        var settings = result.Settings as HardenCommand.Settings;
         using (Assert.Multiple())
         {
-            await Assert.That(settings).IsNotNull();
-            await Assert.That(settings!.CommentMode).IsEqualTo(TagCommentMode.ExactTag);
+            await Assert.That(parseResult.Errors.Count).IsEqualTo(0);
+            await Assert.That(parseResult.GetRequiredValue(HardenCommand.Inputs.CommentMode)).IsEqualTo(TagCommentMode.ExactTag);
         }
     }
 
-    // Test 3 — --token is parsed and forwarded to the factory
+    // Test 3 — --token is parsed and forwarded to the factory on Invoke.
     [Test]
-    public async Task Execute_TokenArg_TokenForwardedToFactory()
+    public async Task Invoke_TokenArg_TokenForwardedToFactory()
     {
         string? capturedToken = null;
-        var app = BuildTester(hardenerFactory: (token, _) =>
+        var rootCommand = BuildRootCommand(hardenerFactory: (token, _) =>
         {
             capturedToken = token;
             return new WorkflowHardener(_fakeClient);
         });
 
-        await app.RunAsync(["--token", "my-pat", _root]);
+        var exit = await rootCommand.Parse(["--token", "my-pat", _root]).InvokeAsync();
 
-        await Assert.That(capturedToken).IsEqualTo("my-pat");
+        using (Assert.Multiple())
+        {
+            await Assert.That(exit).IsEqualTo(0);
+            await Assert.That(capturedToken).IsEqualTo("my-pat");
+        }
     }
 
-    // Test 4 — successful run (no workflow files) returns exit code 0
+    // Test 4 — successful run (no workflow files) returns exit code 0.
     [Test]
-    public async Task Execute_SuccessfulRun_ReturnsExitCodeZero()
+    public async Task Invoke_SuccessfulRun_ReturnsExitCodeZero()
     {
-        var app = BuildTester();
+        var rootCommand = BuildRootCommand();
 
-        var result = await app.RunAsync([_root]);
+        var exit = await rootCommand.Parse([_root]).InvokeAsync();
 
-        await Assert.That(result.ExitCode).IsEqualTo(0);
+        await Assert.That(exit).IsEqualTo(0);
     }
 
-    // Test 5 — GitHubApiException → exit code 1 and error message in output
+    // Test 5 — GitHubApiException → exit code 1 and error message in output.
     [Test]
-    public async Task Execute_GitHubApiException_ReturnsExitCodeOneWithMessage()
+    public async Task Invoke_GitHubApiException_ReturnsExitCodeOneWithMessage()
     {
         var workflowPath = Path.Combine(_root, ".github", "workflows", "ci.yml");
         await File.WriteAllTextAsync(workflowPath, "      - uses: actions/checkout@v4");
 
-        // FakeGitHubApiClient throws GitHubApiException for any unregistered ref
-        var app = BuildTester();
+        var (rootCommand, output) = BuildRootCommandWithCapture();
 
-        var result = await app.RunAsync([_root]);
+        var exit = await rootCommand.Parse([_root]).InvokeAsync();
 
         using (Assert.Multiple())
         {
-            await Assert.That(result.ExitCode).IsEqualTo(1);
-            await Assert.That(result.Output).Contains("GitHub API error");
+            await Assert.That(exit).IsEqualTo(1);
+            await Assert.That(output.ToString()).Contains("GitHub API error");
         }
     }
 
-    // Test 6 — --verbose flag is parsed into settings
+    // Test 6 — --verbose flag is parsed.
     [Test]
-    public async Task Execute_VerboseFlag_ParsedIntoSettings()
+    public async Task Parse_VerboseFlag_Parsed()
     {
-        var app = BuildTester();
+        var rootCommand = BuildRootCommand();
 
-        var result = await app.RunAsync(["--verbose"]);
+        var parseResult = rootCommand.Parse(["--verbose"]);
 
-        var settings = result.Settings as HardenCommand.Settings;
-        await Assert.That(settings!.Verbose).IsTrue();
+        using (Assert.Multiple())
+        {
+            await Assert.That(parseResult.Errors.Count).IsEqualTo(0);
+            await Assert.That(parseResult.GetRequiredValue(HardenCommand.Inputs.Verbose)).IsTrue();
+        }
     }
 
-    // Test 7 — --quiet flag is parsed into settings
+    // Test 7 — --quiet flag is parsed.
     [Test]
-    public async Task Execute_QuietFlag_ParsedIntoSettings()
+    public async Task Parse_QuietFlag_Parsed()
     {
-        var app = BuildTester();
+        var rootCommand = BuildRootCommand();
 
-        var result = await app.RunAsync(["--quiet"]);
+        var parseResult = rootCommand.Parse(["--quiet"]);
 
-        var settings = result.Settings as HardenCommand.Settings;
-        await Assert.That(settings!.Quiet).IsTrue();
+        using (Assert.Multiple())
+        {
+            await Assert.That(parseResult.Errors.Count).IsEqualTo(0);
+            await Assert.That(parseResult.GetRequiredValue(HardenCommand.Inputs.Quiet)).IsTrue();
+        }
     }
 
-    // Test 8 — --dry-run flag is parsed and forwarded to hardener options (file not modified)
+    // Test 8 — --dry-run flag is forwarded into HardeningOptions; file is not modified.
     [Test]
-    public async Task Execute_DryRunFlag_FileNotModified()
+    public async Task Invoke_DryRunFlag_FileNotModified()
     {
         _fakeClient.SetupResolve("actions", "checkout", "v4", "aabbccddaabbccddaabbccddaabbccddaabbccdd");
         var workflowPath = Path.Combine(_root, ".github", "workflows", "ci.yml");
         const string original = "      - uses: actions/checkout@v4";
         await File.WriteAllTextAsync(workflowPath, original);
 
-        var app = BuildTester();
-        var result = await app.RunAsync(["--dry-run", _root]);
+        var rootCommand = BuildRootCommand();
+        var exit = await rootCommand.Parse(["--dry-run", _root]).InvokeAsync();
 
         var actual = await File.ReadAllTextAsync(workflowPath);
         using (Assert.Multiple())
         {
-            await Assert.That(result.ExitCode).IsEqualTo(0);
+            await Assert.That(exit).IsEqualTo(0);
             await Assert.That(actual).IsEqualTo(original);
         }
     }
 
-    // Test 9 — log level passed to factory: --verbose → LogLevel.Debug
+    // Test 9 — --verbose passes LogLevel.Debug to the factory.
     [Test]
-    public async Task Execute_VerboseFlag_PassesDebugLogLevelToFactory()
+    public async Task Invoke_VerboseFlag_PassesDebugLogLevelToFactory()
     {
         LogLevel? capturedLevel = null;
-        var app = BuildTester(hardenerFactory: (_, level) =>
+        var rootCommand = BuildRootCommand(hardenerFactory: (_, level) =>
         {
             capturedLevel = level;
             return new WorkflowHardener(_fakeClient);
         });
 
-        await app.RunAsync(["--verbose", _root]);
+        await rootCommand.Parse(["--verbose", _root]).InvokeAsync();
 
         await Assert.That(capturedLevel).IsEqualTo(LogLevel.Debug);
     }
 
-    // Test 10 — log level passed to factory: --quiet → LogLevel.Warning
+    // Test 10 — --quiet passes LogLevel.Warning to the factory.
     [Test]
-    public async Task Execute_QuietFlag_PassesWarningLogLevelToFactory()
+    public async Task Invoke_QuietFlag_PassesWarningLogLevelToFactory()
     {
         LogLevel? capturedLevel = null;
-        var app = BuildTester(hardenerFactory: (_, level) =>
+        var rootCommand = BuildRootCommand(hardenerFactory: (_, level) =>
         {
             capturedLevel = level;
             return new WorkflowHardener(_fakeClient);
         });
 
-        await app.RunAsync(["--quiet", _root]);
+        await rootCommand.Parse(["--quiet", _root]).InvokeAsync();
 
         await Assert.That(capturedLevel).IsEqualTo(LogLevel.Warning);
     }
 
     // ── helpers ──────────────────────────────────────────────────────────────
 
-    private TestConsole BuildTester(Func<string?, LogLevel, WorkflowHardener>? hardenerFactory = null)
+    private RootCommand BuildRootCommand(Func<string?, LogLevel, WorkflowHardener>? hardenerFactory = null)
+        => BuildRootCommandWithCapture(hardenerFactory).RootCommand;
+
+    private (RootCommand RootCommand, StringWriter Output) BuildRootCommandWithCapture(
+        Func<string?, LogLevel, WorkflowHardener>? hardenerFactory = null)
     {
         hardenerFactory ??= (_, _) => new WorkflowHardener(_fakeClient);
 
-        var services = new ServiceCollection();
-        services.AddSingleton(hardenerFactory);
+        var writer = new StringWriter(System.Globalization.CultureInfo.InvariantCulture);
+        var console = AnsiConsole.Create(new AnsiConsoleSettings
+        {
+            Ansi = AnsiSupport.No,
+            ColorSystem = ColorSystemSupport.NoColors,
+            Interactive = InteractionSupport.No,
+            Out = new AnsiConsoleOutput(writer),
+        });
 
-        var registrar = new TypeRegistrar(services);
-        var app = new CommandAppTester(registrar: registrar);
-        app.SetDefaultCommand<HardenCommand>();
-        return app;
+        var services = new ServiceCollection();
+        services.AddSingleton(console);
+        services.AddSingleton(hardenerFactory);
+        services.AddSingleton<HardenCommand>();
+        var sp = services.BuildServiceProvider();
+
+        var rootCommand = HardenCommand.BuildRootCommand(sp);
+        return (rootCommand, writer);
     }
 }

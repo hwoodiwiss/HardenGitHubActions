@@ -30,7 +30,27 @@ internal sealed class HardenCommand(IAnsiConsole console, Func<string?, LogLevel
     private readonly IAnsiConsole _console = console;
     private readonly Func<string?, LogLevel, WorkflowHardener> _hardenerFactory = hardenerFactory;
 
-    internal static async Task<int> RootCommandActionAsync(ParseResult parseResult, ServiceProvider serviceProvider, CancellationToken cancellationToken)
+    internal static RootCommand BuildRootCommand(IServiceProvider serviceProvider)
+    {
+        ArgumentNullException.ThrowIfNull(serviceProvider);
+
+        var rootCommand = new RootCommand("Harden GitHub Actions workflow files by pinning action versions to specific SHAs")
+        {
+            Inputs.RepositoryRoot,
+            Inputs.CommentMode,
+            Inputs.GitHubToken,
+            Inputs.Verbose,
+            Inputs.Quiet,
+            Inputs.DryRun,
+        };
+
+        rootCommand.SetAction((parseResult, cancellationToken)
+            => RootCommandActionAsync(parseResult, serviceProvider, cancellationToken));
+
+        return rootCommand;
+    }
+
+    internal static async Task<int> RootCommandActionAsync(ParseResult parseResult, IServiceProvider serviceProvider, CancellationToken cancellationToken)
     {
         var repositoryRoot = parseResult.GetRequiredValue<string>(Inputs.RepositoryRoot);
         var commentMode = parseResult.GetRequiredValue(Inputs.CommentMode);
