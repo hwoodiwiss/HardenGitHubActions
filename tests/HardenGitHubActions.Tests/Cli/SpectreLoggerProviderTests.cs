@@ -7,20 +7,16 @@ namespace HardenGitHubActions.Tests.Cli;
 
 public sealed class SpectreLoggerProviderTests
 {
-    // Test 1 — when dynamic code IS supported, an exception is rendered with
-    // Spectre's WriteException (which produces its rich, multi-segment output).
+    // Test 1 — the Spectre writer renders the exception type, message and a
+    // stack frame for the throwing method.
     [Test]
-    public async Task Log_DynamicCodeSupported_UsesSpectreWriteException()
+    public async Task WriteExceptionWithSpectre_RendersTypeMessageAndStack()
     {
         var (console, output) = CreateConsole();
         var ex = MakeException();
-        var provider = new SpectreLoggerProvider(console, LogLevel.Trace, dynamicCodeSupported: true);
-        var logger = provider.CreateLogger("cat");
 
-        logger.Log(LogLevel.Error, new EventId(0), "boom", ex, static (s, _) => s);
+        SpectreLoggerProvider.WriteExceptionWithSpectre(console, ex);
 
-        // Spectre's WriteException produces the type name AND the message AND
-        // the standard "at <method>" stack-frame prefix.
         var text = output.ToString();
         using (Assert.Multiple())
         {
@@ -30,18 +26,15 @@ public sealed class SpectreLoggerProviderTests
         }
     }
 
-    // Test 2 — when dynamic code is NOT supported (AOT), the fallback writer
-    // emits a "Type: Message" header and the stack trace, without calling
-    // WriteException.
+    // Test 2 — the AOT-safe fallback emits a "Type: Message" header and the
+    // stack trace.
     [Test]
-    public async Task Log_DynamicCodeNotSupported_FallbackEmitsTypeMessageAndStack()
+    public async Task WriteExceptionFallback_EmitsTypeMessageAndStack()
     {
         var (console, output) = CreateConsole();
         var ex = MakeException();
-        var provider = new SpectreLoggerProvider(console, LogLevel.Trace, dynamicCodeSupported: false);
-        var logger = provider.CreateLogger("cat");
 
-        logger.Log(LogLevel.Error, new EventId(0), "boom", ex, static (s, _) => s);
+        SpectreLoggerProvider.WriteExceptionFallback(console, ex);
 
         var text = output.ToString();
         using (Assert.Multiple())
@@ -51,17 +44,16 @@ public sealed class SpectreLoggerProviderTests
         }
     }
 
-    // Test 3 — fallback walks the InnerException chain so root causes are visible.
+    // Test 3 — the fallback walks the InnerException chain so root causes are
+    // visible.
     [Test]
-    public async Task Log_DynamicCodeNotSupported_FallbackIncludesInnerException()
+    public async Task WriteExceptionFallback_IncludesInnerException()
     {
         var (console, output) = CreateConsole();
         var inner = new ArgumentException("inner-cause");
         var outer = new InvalidOperationException("outer", inner);
-        var provider = new SpectreLoggerProvider(console, LogLevel.Trace, dynamicCodeSupported: false);
-        var logger = provider.CreateLogger("cat");
 
-        logger.Log(LogLevel.Error, new EventId(0), "boom", outer, static (s, _) => s);
+        SpectreLoggerProvider.WriteExceptionFallback(console, outer);
 
         var text = output.ToString();
         using (Assert.Multiple())
@@ -72,10 +64,11 @@ public sealed class SpectreLoggerProviderTests
         }
     }
 
-    // Test 4 — default constructor wires up to the real RuntimeFeature flag and
-    // still produces *some* exception output (regression: don't silently swallow).
+    // Test 4 — going through the full logger pipeline still surfaces the
+    // exception (regression: don't silently swallow). Routes via whichever
+    // branch the current runtime supports.
     [Test]
-    public async Task Log_DefaultConstructor_RendersException()
+    public async Task Log_WithException_RendersException()
     {
         var (console, output) = CreateConsole();
         var ex = MakeException();

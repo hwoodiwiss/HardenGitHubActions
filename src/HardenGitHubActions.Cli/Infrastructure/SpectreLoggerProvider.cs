@@ -6,18 +6,13 @@ using Spectre.Console;
 
 namespace HardenGitHubActions.Cli.Infrastructure;
 
-internal sealed class SpectreLoggerProvider(IAnsiConsole console, LogLevel minLevel, bool dynamicCodeSupported) : ILoggerProvider
+internal sealed class SpectreLoggerProvider(IAnsiConsole console, LogLevel minLevel) : ILoggerProvider
 {
-    public SpectreLoggerProvider(IAnsiConsole console, LogLevel minLevel)
-        : this(console, minLevel, RuntimeFeature.IsDynamicCodeSupported)
-    {
-    }
-
-    public ILogger CreateLogger(string categoryName) => new SpectreLogger(console, minLevel, dynamicCodeSupported);
+    public ILogger CreateLogger(string categoryName) => new SpectreLogger(console, minLevel);
 
     public void Dispose() { }
 
-    private sealed class SpectreLogger(IAnsiConsole console, LogLevel minLevel, bool dynamicCodeSupported) : ILogger
+    private sealed class SpectreLogger(IAnsiConsole console, LogLevel minLevel) : ILogger
     {
         public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
 
@@ -49,18 +44,16 @@ internal sealed class SpectreLoggerProvider(IAnsiConsole console, LogLevel minLe
             };
 
             console.MarkupLine($"[{colour}]{tag}[/] {message}");
-            if (exception is not null)
-            {
-                WriteException(console, exception, dynamicCodeSupported);
-            }
-        }
 
-        // Spectre's IAnsiConsole.WriteException uses reflection-heavy formatting
-        // that is annotated [RequiresDynamicCode] and is not safe under NativeAOT.
-        // When dynamic code is unavailable we fall back to a string-only writer.
-        private static void WriteException(IAnsiConsole console, Exception exception, bool dynamicCodeSupported)
-        {
-            if (dynamicCodeSupported)
+            if (exception is null)
+            {
+                return;
+            }
+
+            // RuntimeFeature.IsDynamicCodeSupported is a feature-switch constant
+            // under PublishAot=true, so the AOT compiler trims the Spectre branch
+            // (and with it the IL3050-tripping call) entirely from the binary.
+            if (RuntimeFeature.IsDynamicCodeSupported)
             {
                 WriteExceptionWithSpectre(console, exception);
             }
@@ -69,38 +62,41 @@ internal sealed class SpectreLoggerProvider(IAnsiConsole console, LogLevel minLe
                 WriteExceptionFallback(console, exception);
             }
         }
+    }
 
-        // Isolated in its own method so the [RequiresDynamicCode] suppression is
-        // as narrow as possible and the AOT analyser only ever sees this single
-        // call site, gated by the runtime check above.
-        [UnconditionalSuppressMessage(
-            "AOT",
-            "IL3050:RequiresDynamicCode",
-            Justification = "Caller gates this call on RuntimeFeature.IsDynamicCodeSupported; the AOT-safe path is WriteExceptionFallback.")]
-        [MethodImpl(MethodImplOptions.NoInlining)]
-        private static void WriteExceptionWithSpectre(IAnsiConsole console, Exception exception)
-            => console.WriteException(exception);
+    // Isolated in its own method so the IL3050 suppression is as narrow as
+    // possible and the AOT analyser only ever sees this single call site,
+    // which the inline RuntimeFeature.IsDynamicCodeSupported check gates.
+    [UnconditionalSuppressMessage(
+        "AOT",
+        "IL3050:RequiresDynamicCode",
+        Justification = "Caller gates this call on RuntimeFeature.IsDynamicCodeSupported; the AOT-safe path is WriteExceptionFallback.")]
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    internal static void WriteExceptionWithSpectre(IAnsiConsole console, Exception exception)
+        => console.WriteException(exception);
 
-        private static void WriteExceptionFallback(IAnsiConsole console, Exception exception)
+    internal static void WriteExceptionFallback(IAnsiConsole console, Exception exception)
+    {
+        ArgumentNullException.ThrowIfNull(console);
+        ArgumentNullException.ThrowIfNull(exception);
+
+        for (var current = exception; current is not null; current = current.InnerException)
         {
-            for (var current = exception; current is not null; current = current.InnerException)
+            var header = string.Format(
+                CultureInfo.InvariantCulture,
+                "{0}: {1}",
+                current.GetType().FullName,
+                current.Message);
+            console.MarkupLine($"[red]{Markup.Escape(header)}[/]");
+
+            if (!string.IsNullOrEmpty(current.StackTrace))
             {
-                var header = string.Format(
-                    CultureInfo.InvariantCulture,
-                    "{0}: {1}",
-                    current.GetType().FullName,
-                    current.Message);
-                console.MarkupLine($"[red]{Markup.Escape(header)}[/]");
+                console.WriteLine(current.StackTrace);
+            }
 
-                if (!string.IsNullOrEmpty(current.StackTrace))
-                {
-                    console.WriteLine(current.StackTrace);
-                }
-
-                if (current.InnerException is not null)
-                {
-                    console.MarkupLine("[red] ---> (inner exception)[/]");
-                }
+            if (current.InnerException is not null)
+            {
+                console.MarkupLine("[red] ---> (inner exception)[/]");
             }
         }
     }
