@@ -121,7 +121,7 @@ public sealed class WorkflowHardenerTests : IDisposable
     {
         var client = new FakeGitHubApiClient();
 
-        var filePath = CreateWorkflowFile("ci.yml", $"      - uses: actions/checkout@{TagSha}");
+        _ = CreateWorkflowFile("ci.yml", $"      - uses: actions/checkout@{TagSha}");
         var hardener = new WorkflowHardener(client);
 
         var summary = await hardener.HardenAsync(_root, new HardeningOptions());

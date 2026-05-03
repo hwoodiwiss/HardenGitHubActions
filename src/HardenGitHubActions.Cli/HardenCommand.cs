@@ -1,52 +1,71 @@
-using System.ComponentModel;
-using System.Diagnostics.CodeAnalysis;
+using System.CommandLine;
+using HardenGitHubActions.Cli.Arguments;
+using HardenGitHubActions.Cli.Options;
 using HardenGitHubActions.Core;
 using HardenGitHubActions.Core.GitHub;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Spectre.Console;
-using Spectre.Console.Cli;
 
 namespace HardenGitHubActions.Cli;
 
-// Instantiated by Spectre.Console.Cli via reflection
-[SuppressMessage("Performance", "CA1812:Avoid uninstantiated internal classes", Justification = "Instantiated by Spectre.Console.Cli via reflection")]
-internal sealed class HardenCommand(IAnsiConsole console, Func<string?, LogLevel, WorkflowHardener> hardenerFactory) : AsyncCommand<HardenCommand.Settings>
+internal sealed class HardenCommand(IAnsiConsole console, Func<string?, LogLevel, WorkflowHardener> hardenerFactory)
 {
-    // Instantiated by Spectre.Console.Cli via reflection
-    [SuppressMessage("Performance", "CA1812:Avoid uninstantiated internal classes", Justification = "Instantiated by Spectre.Console.Cli via reflection")]
-    internal sealed class Settings : CommandSettings
+    internal static class Inputs
     {
-        [CommandArgument(0, "[repository-root]")]
-        [Description("Path to the repository root (default: current directory)")]
-        [DefaultValue(".")]
-        public string RepositoryRoot { get; init; } = ".";
+        public static RepositoryRootArgument RepositoryRoot { get; } = new RepositoryRootArgument();
 
-        [CommandOption("--comment-mode")]
-        [Description("Append a tag comment after each pinned SHA (None, ExactTag, MostSpecificTag)")]
-        [DefaultValue(TagCommentMode.None)]
-        public TagCommentMode CommentMode { get; init; }
+        public static CommentModeOption CommentMode { get; } = new CommentModeOption();
 
-        [CommandOption("--token")]
-        [Description("GitHub personal access token for authenticated API requests")]
-        public string? Token { get; init; }
+        public static GitHubTokenOption GitHubToken { get; } = new GitHubTokenOption();
 
-        [CommandOption("-v|--verbose")]
-        [Description("Enable verbose (Debug) logging")]
-        public bool Verbose { get; init; }
+        public static VerboseFlag Verbose { get; } = new VerboseFlag();
 
-        [CommandOption("-q|--quiet")]
-        [Description("Suppress informational output (Warnings and above only)")]
-        public bool Quiet { get; init; }
+        public static QuietFlag Quiet { get; } = new QuietFlag();
 
-        [CommandOption("--dry-run")]
-        [Description("Show what would change without writing any files")]
-        public bool DryRun { get; init; }
+        public static DryRunFlag DryRun { get; } = new DryRunFlag();
     }
+
+    internal sealed record Settings(string RepositoryRoot, TagCommentMode CommentMode, string? Token, bool Verbose, bool Quiet, bool DryRun);
 
     private readonly IAnsiConsole _console = console;
     private readonly Func<string?, LogLevel, WorkflowHardener> _hardenerFactory = hardenerFactory;
 
-    protected override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken)
+    internal static RootCommand BuildRootCommand(IServiceProvider serviceProvider)
+    {
+        ArgumentNullException.ThrowIfNull(serviceProvider);
+
+        var rootCommand = new RootCommand("Harden GitHub Actions workflow files by pinning action versions to specific SHAs")
+        {
+            Inputs.RepositoryRoot,
+            Inputs.CommentMode,
+            Inputs.GitHubToken,
+            Inputs.Verbose,
+            Inputs.Quiet,
+            Inputs.DryRun,
+        };
+
+        rootCommand.SetAction((parseResult, cancellationToken)
+            => RootCommandActionAsync(parseResult, serviceProvider, cancellationToken));
+
+        return rootCommand;
+    }
+
+    internal static async Task<int> RootCommandActionAsync(ParseResult parseResult, IServiceProvider serviceProvider, CancellationToken cancellationToken)
+    {
+        var repositoryRoot = parseResult.GetRequiredValue<string>(Inputs.RepositoryRoot);
+        var commentMode = parseResult.GetRequiredValue(Inputs.CommentMode);
+        var token = parseResult.GetRequiredValue(Inputs.GitHubToken);
+        var verbose = parseResult.GetRequiredValue(Inputs.Verbose);
+        var quiet = parseResult.GetRequiredValue(Inputs.Quiet);
+        var dryRun = parseResult.GetRequiredValue(Inputs.DryRun);
+
+        var settings = new Settings(repositoryRoot, commentMode, token, verbose, quiet, dryRun);
+        var command = serviceProvider.GetRequiredService<HardenCommand>();
+        return await command.ExecuteAsync(settings, cancellationToken);
+    }
+
+    internal async Task<int> ExecuteAsync(Settings settings, CancellationToken cancellationToken)
     {
         var logLevel = settings switch
         {

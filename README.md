@@ -46,7 +46,7 @@ harden-actions --token "$GITHUB_TOKEN"
 | Flag | Description | Default |
 | --- | --- | --- |
 | `[repository-root]` | Positional argument: path to the repository root to scan. | `.` |
-| `--comment-mode` | Append a tag comment after each pinned SHA. One of `None`, `ExactTag`, `MostSpecificTag`. | `None` |
+| `--comment-mode` | Append a tag comment after each pinned SHA. One of `None`, `ExactTag`, `MostSpecificTag`. | `MostSpecificTag` |
 | `--token` | GitHub personal access token used for authenticated API requests. | _(unset)_ |
 | `-v`, `--verbose` | Enable verbose (Debug-level) logging. | `false` |
 | `-q`, `--quiet` | Suppress informational output (warnings and above only). | `false` |

@@ -5,8 +5,6 @@ using HardenGitHubActions.Core.GitHub;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Spectre.Console;
-using Spectre.Console.Cli;
-using System.Reflection;
 
 using var cts = new CancellationTokenSource();
 Console.CancelKeyPress += (_, e) =>
@@ -17,7 +15,7 @@ Console.CancelKeyPress += (_, e) =>
 
 var services = new ServiceCollection();
 
-services.AddSingleton<IAnsiConsole>(AnsiConsole.Console);
+services.AddSingleton(AnsiConsole.Console);
 services.AddSingleton<Func<string?, LogLevel, WorkflowHardener>>(sp =>
     (token, level) =>
     {
@@ -30,16 +28,10 @@ services.AddSingleton<Func<string?, LogLevel, WorkflowHardener>>(sp =>
         var logger = loggerFactory.CreateLogger<WorkflowHardener>();
         return new WorkflowHardener(new GitHubApiClient(new HttpClient(), token), logger);
     });
+services.AddSingleton<HardenCommand>();
 
-var registrar = new TypeRegistrar(services);
-var app = new CommandApp<HardenCommand>(registrar);
+var sp = services.BuildServiceProvider();
 
-app.Configure(config =>
-{
-    config.SetApplicationName("harden-actions");
-    config.SetApplicationVersion(Assembly.GetEntryAssembly()?.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "1.0.0");
-});
+var rootCommand = HardenCommand.BuildRootCommand(sp);
 
-#pragma warning disable CA2007
-return await app.RunAsync(args, cts.Token);
-#pragma warning restore CA2007
+await rootCommand.Parse(args).InvokeAsync();
