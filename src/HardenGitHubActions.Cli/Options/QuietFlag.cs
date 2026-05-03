@@ -1,13 +1,13 @@
 using System.CommandLine;
 using System.CommandLine.Parsing;
 
-namespace HardenGitHubActions.Cli.Inputs;
+namespace HardenGitHubActions.Cli.Options;
 
-public sealed class DryRunFlag : Option<bool>
+public sealed class QuietFlag : Option<bool>
 {
-    public DryRunFlag() : base("--dry-run")
+    public QuietFlag() : base("--quiet", "-q")
     {
-        Description = "Show what would change without writing any files";
+        Description = "Suppress informational output (Warnings and above only)";
         Arity = ArgumentArity.ZeroOrOne;
         DefaultValueFactory = GetDefaultValue;
     }

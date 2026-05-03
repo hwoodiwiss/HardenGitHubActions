@@ -1,7 +1,7 @@
 using System.CommandLine;
 using System.CommandLine.Parsing;
 
-namespace HardenGitHubActions.Cli.Inputs;
+namespace HardenGitHubActions.Cli.Options;
 
 public sealed class GitHubTokenOption : Option<string?>
 {

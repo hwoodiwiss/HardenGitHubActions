@@ -1,5 +1,6 @@
 using System.CommandLine;
-using HardenGitHubActions.Cli.Inputs;
+using HardenGitHubActions.Cli.Arguments;
+using HardenGitHubActions.Cli.Options;
 using HardenGitHubActions.Core;
 using HardenGitHubActions.Core.GitHub;
 using Microsoft.Extensions.DependencyInjection;

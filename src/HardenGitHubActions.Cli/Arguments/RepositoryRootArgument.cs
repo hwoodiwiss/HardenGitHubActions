@@ -1,7 +1,7 @@
 using System.CommandLine;
 using System.CommandLine.Parsing;
 
-namespace HardenGitHubActions.Cli.Inputs;
+namespace HardenGitHubActions.Cli.Arguments;
 
 public sealed class RepositoryRootArgument : Argument<string>
 {
