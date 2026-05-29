@@ -5,7 +5,7 @@ namespace HardenGitHubActions.Core;
 public sealed record ActionReference
 {
     private static readonly Regex OwnerRepoRefPattern = new(
-        @"^(?<owner>[^/\s]+)/(?<repo>[^@\s]+)@(?<ref>\S+)$",
+        @"^(?<owner>[^/\s]+)/(?<repo>[^/@\s]+)(?:/(?<subpath>[^@\s]+))?@(?<ref>\S+)$",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
     private static readonly Regex ShaPattern = new(
@@ -14,6 +14,7 @@ public sealed record ActionReference
 
     public string Owner { get; init; } = string.Empty;
     public string Repo { get; init; } = string.Empty;
+    public string SubPath { get; init; } = string.Empty;
     public string Ref { get; init; } = string.Empty;
     public bool IsAlreadyPinned { get; init; }
     public bool IsLocalPath { get; init; }
@@ -48,6 +49,7 @@ public sealed record ActionReference
 
         var owner = match.Groups["owner"].Value;
         var repo = match.Groups["repo"].Value;
+        var subPath = match.Groups["subpath"].Value;
         var @ref = match.Groups["ref"].Value;
 
         if (string.IsNullOrEmpty(owner) || string.IsNullOrEmpty(repo))
@@ -59,6 +61,7 @@ public sealed record ActionReference
         {
             Owner = owner,
             Repo = repo,
+            SubPath = subPath,
             Ref = @ref,
             IsAlreadyPinned = ShaPattern.IsMatch(@ref),
         };

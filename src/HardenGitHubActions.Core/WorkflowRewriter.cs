@@ -78,7 +78,7 @@ public sealed partial class WorkflowRewriter
             var comment = await GetCommentAsync(
                 actionRef.Owner, actionRef.Repo, actionRef.Ref, options, github, ct).ConfigureAwait(false);
 
-            return BuildLine(prefix, actionRef.Owner, actionRef.Repo, actionRef.Ref, comment) + lineEnding;
+            return BuildLine(prefix, actionRef.Owner, actionRef.Repo, actionRef.SubPath, actionRef.Ref, comment) + lineEnding;
         }
 
         var sha = await github.ResolveTagToCommitShaAsync(
@@ -91,7 +91,7 @@ public sealed partial class WorkflowRewriter
             TagCommentMode.None or _ => null,
         };
 
-        return BuildLine(prefix, actionRef.Owner, actionRef.Repo, sha, tagComment) + lineEnding;
+        return BuildLine(prefix, actionRef.Owner, actionRef.Repo, actionRef.SubPath, sha, tagComment) + lineEnding;
     }
 
     private static async Task<string?> GetCommentAsync(
@@ -110,9 +110,10 @@ public sealed partial class WorkflowRewriter
         };
     }
 
-    private static string BuildLine(string prefix, string owner, string repo, string sha, string? comment)
+    private static string BuildLine(string prefix, string owner, string repo, string subPath, string sha, string? comment)
     {
-        var uses = $"{prefix}uses: {owner}/{repo}@{sha}";
+        var path = string.IsNullOrEmpty(subPath) ? $"{owner}/{repo}" : $"{owner}/{repo}/{subPath}";
+        var uses = $"{prefix}uses: {path}@{sha}";
         return comment is not null ? $"{uses}  # {comment}" : uses;
     }
 }

@@ -108,6 +108,24 @@ public sealed class WorkflowRewriterTests
         }
     }
 
+    // Test 4b — three-part owner/repo/sub-action@tag resolves on owner/repo and preserves the subpath
+    [Test]
+    public async Task RewriteAsync_ThreePartActionRef_ResolvesRepoAndPreservesSubPath()
+    {
+        const string content = "      - uses: github/codeql-action/init@v4";
+        var client = new FakeGitHubApiClient();
+        client.SetupResolve("github", "codeql-action", "v4", ResolveSha);
+        var options = new HardeningOptions { CommentMode = TagCommentMode.None };
+
+        var result = await WorkflowRewriter.RewriteAsync(content, options, client);
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(result).IsEqualTo($"      - uses: github/codeql-action/init@{ResolveSha}");
+            await Assert.That(client.ResolveCallCount).IsEqualTo(1);
+        }
+    }
+
     // Test 5 — already-SHA-pinned, CommentMode=None → line unchanged
     [Test]
     public async Task RewriteAsync_AlreadyPinned_CommentModeNone_LineUnchanged()
