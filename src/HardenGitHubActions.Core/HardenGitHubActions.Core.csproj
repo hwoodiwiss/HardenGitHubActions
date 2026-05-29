@@ -11,5 +11,11 @@
     <None Include="$(MSBuildThisFileDirectory)..\..\LICENSE" Pack="true" PackagePath="\" />
     <None Include="$(MSBuildThisFileDirectory)..\..\README.md" Pack="true" PackagePath="\" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- NU1510: package will not be pruned — suppressed because net11.0 preview does not yet
+         include Microsoft.Extensions.Logging.Abstractions in the shared framework on all
+         build environments (e.g. CI), so the explicit reference is still required. -->
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" NoWarn="NU1510" />
+  </ItemGroup>
 
 </Project>
