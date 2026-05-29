@@ -87,7 +87,55 @@ public sealed class ActionReferenceTests
         }
     }
 
-    // Test 6 — malformed input returns false
+    // Test 6 — three-part owner/repo/sub-action@tag splits the subpath off the repo
+    [Test]
+    public async Task TryParse_ThreePartActionRef_SeparatesSubPathFromRepo()
+    {
+        var result = ActionReference.TryParse("github/codeql-action/init@v4", out var reference);
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(result).IsTrue();
+            await Assert.That(reference).IsNotNull();
+            await Assert.That(reference!.Owner).IsEqualTo("github");
+            await Assert.That(reference.Repo).IsEqualTo("codeql-action");
+            await Assert.That(reference.SubPath).IsEqualTo("init");
+            await Assert.That(reference.Ref).IsEqualTo("v4");
+        }
+    }
+
+    // Test 7 — deeply nested subpath is preserved in full
+    [Test]
+    public async Task TryParse_NestedSubPath_PreservesFullSubPath()
+    {
+        var result = ActionReference.TryParse("owner/repo/a/b/c@v1.2.3", out var reference);
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(result).IsTrue();
+            await Assert.That(reference).IsNotNull();
+            await Assert.That(reference!.Owner).IsEqualTo("owner");
+            await Assert.That(reference.Repo).IsEqualTo("repo");
+            await Assert.That(reference.SubPath).IsEqualTo("a/b/c");
+            await Assert.That(reference.Ref).IsEqualTo("v1.2.3");
+        }
+    }
+
+    // Test 8 — a two-part ref has an empty subpath
+    [Test]
+    public async Task TryParse_TwoPartRef_HasEmptySubPath()
+    {
+        var result = ActionReference.TryParse("actions/checkout@v4", out var reference);
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(result).IsTrue();
+            await Assert.That(reference).IsNotNull();
+            await Assert.That(reference!.SubPath).IsEqualTo(string.Empty);
+        }
+    }
+
+    // Test 9 — malformed input returns false
     [Test]
     [Arguments("no-slash-or-at")]
     [Arguments("owner/repo")]
