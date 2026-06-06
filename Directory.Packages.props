@@ -5,6 +5,6 @@
     <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="11.0.0-preview.3.26207.106" />
     <PackageVersion Include="Spectre.Console" Version="0.55.2" />
     <PackageVersion Include="System.CommandLine" Version="3.0.0-preview.4.26230.115" />
-    <PackageVersion Include="TUnit" Version="1.45.29" />
+    <PackageVersion Include="TUnit" Version="1.50.0" />
   </ItemGroup>
 </Project>
