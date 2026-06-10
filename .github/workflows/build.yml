@@ -111,6 +111,7 @@ jobs:
           dotnet publish src/HardenGitHubActions.Cli/HardenGitHubActions.Cli.csproj
           --configuration Release
           --runtime ${{ matrix.rid }}
+          --framework net11.0
           --self-contained
           -p:PublishAot=true
           -p:Version=${{ needs.compute-version.outputs.version }}
@@ -119,7 +120,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p staging
-          mv "artifacts/publish/HardenGitHubActions.Cli/release_${{ matrix.rid }}/harden-actions${{ matrix.ext }}" \
+          mv "artifacts/publish/HardenGitHubActions.Cli/release_net11.0_${{ matrix.rid }}/harden-actions${{ matrix.ext }}" \
              "staging/harden-actions-${{ matrix.rid }}${{ matrix.ext }}"
 
       - name: Generate SHA256 checksum
