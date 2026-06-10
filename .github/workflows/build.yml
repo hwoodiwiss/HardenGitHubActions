@@ -111,6 +111,7 @@ jobs:
           dotnet publish src/HardenGitHubActions.Cli/HardenGitHubActions.Cli.csproj
           --configuration Release
           --runtime ${{ matrix.rid }}
+          --framework net11.0
           --self-contained
           -p:PublishAot=true
           -p:Version=${{ needs.compute-version.outputs.version }}
