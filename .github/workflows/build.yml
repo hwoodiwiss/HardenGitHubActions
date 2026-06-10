@@ -120,7 +120,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p staging
-          mv "artifacts/publish/HardenGitHubActions.Cli/release_${{ matrix.rid }}/harden-actions${{ matrix.ext }}" \
+          mv "artifacts/publish/HardenGitHubActions.Cli/release_net11.0_${{ matrix.rid }}/harden-actions${{ matrix.ext }}" \
              "staging/harden-actions-${{ matrix.rid }}${{ matrix.ext }}"
 
       - name: Generate SHA256 checksum
